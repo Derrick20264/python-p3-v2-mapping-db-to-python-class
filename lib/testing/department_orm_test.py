@@ -1,6 +1,8 @@
-from __init__ import CONN, CURSOR
-from department import Department
+
+from lib.department import Department
 import pytest
+
+from lib.__init__ import CURSOR, CONN
 
 
 class TestDepartment:
