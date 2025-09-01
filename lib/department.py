@@ -3,14 +3,13 @@
 from __init__ import CONN, CURSOR
 
 class Department:
+    all = {}
+
     def __init__(self, name, location, id=None):
         self.id = id
         self.name = name
         self.location = location
 
-    # ------------------------
-    # Table methods
-    # ------------------------
     @classmethod
     def create_table(cls):
         sql = """
@@ -18,52 +17,32 @@ class Department:
                 id INTEGER PRIMARY KEY,
                 name TEXT,
                 location TEXT
-            );
+            )
         """
         CURSOR.execute(sql)
         CONN.commit()
 
     @classmethod
     def drop_table(cls):
-        sql = "DROP TABLE IF EXISTS departments;"
+        sql = "DROP TABLE IF EXISTS departments"
         CURSOR.execute(sql)
         CONN.commit()
 
-    # ------------------------
-    # Save / Update / Delete
-    # ------------------------
     def save(self):
-        if self.id:  # already in db → update
-            self.update()
-        else:        # not in db → insert new
-            sql = "INSERT INTO departments (name, location) VALUES (?, ?)"
-            CURSOR.execute(sql, (self.name, self.location))
-            CONN.commit()
-            self.id = CURSOR.lastrowid
-
-    def update(self):
-        sql = "UPDATE departments SET name = ?, location = ? WHERE id = ?"
-        CURSOR.execute(sql, (self.name, self.location, self.id))
+        sql = """
+            INSERT INTO departments (name, location)
+            VALUES (?, ?)
+        """
+        CURSOR.execute(sql, (self.name, self.location))
+        self.id = CURSOR.lastrowid
         CONN.commit()
+        type(self).all[self.id] = self
 
-    def delete(self):
-        sql = "DELETE FROM departments WHERE id = ?"
-        CURSOR.execute(sql, (self.id,))
-        CONN.commit()
-        self.id = None
-
-    # ------------------------
-    # Class-level CRUD helpers
-    # ------------------------
     @classmethod
     def create(cls, name, location):
         department = cls(name, location)
         department.save()
         return department
-
-    @classmethod
-    def instance_from_db(cls, row):
-        return cls(id=row[0], name=row[1], location=row[2])
 
     @classmethod
     def get_all(cls):
@@ -82,3 +61,39 @@ class Department:
         sql = "SELECT * FROM departments WHERE name = ?"
         row = CURSOR.execute(sql, (name,)).fetchone()
         return cls.instance_from_db(row) if row else None
+
+    def update(self):
+        sql = """
+            UPDATE departments
+            SET name = ?, location = ?
+            WHERE id = ?
+        """
+        CURSOR.execute(sql, (self.name, self.location, self.id))
+        CONN.commit()
+
+    def delete(self):
+        sql = """
+            DELETE FROM departments
+            WHERE id = ?
+        """
+        CURSOR.execute(sql, (self.id,))
+        CONN.commit()
+
+        # Remove from cache
+        if self.id in Department.all:
+            del Department.all[self.id]
+
+        # Reset object state
+        self.id = None
+
+
+    @classmethod
+    def instance_from_db(cls, row):
+        department = cls.all.get(row[0])
+        if department:
+            department.name = row[1]
+            department.location = row[2]
+        else:
+            department = cls(row[1], row[2], row[0])
+            cls.all[department.id] = department
+        return department
